@@ -13,9 +13,10 @@ use HTTP::Request::Common;
 use LWP::UserAgent;
 use XML::Writer;
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
 use constant CALAIS_URL => 'http://api.opencalais.com/enlighten/rest/';
+use constant SEMANTICPROXY_URL => 'http://service.semanticproxy.com/processurl/%s/%s/%s';
 
 #--
 sub new {
@@ -59,6 +60,22 @@ sub enlighten {
     $xmlWriter->end;
     
     my $response = $self->{ua}->request(POST CALAIS_URL, \%request_params);
+    if (!$response->is_success) {
+        $self->{error} = $response->status_line;
+        return undef;
+    }
+    return $response->content;
+}
+#--
+sub semanticproxy {
+    my __PACKAGE__ $self = shift;
+    my ($url, %params) = @_;
+    
+    die "URL is required\n" unless $url;
+    $params{output} ||= 'html';
+    
+    my $reqUrl = sprintf(SEMANTICPROXY_URL, $self->{apikey}, $params{output}, $url);
+    my $response = $self->{ua}->request(GET $reqUrl);
     if (!$response->is_success) {
         $self->{error} = $response->status_line;
         return undef;
@@ -115,7 +132,6 @@ Unless specified, text/txt is assumed.
 
 =item  outputFormat
 
-
 =item  reltagBaseURL
 
 =item  calculateRelevanceScore
@@ -134,6 +150,22 @@ Unless specified, text/txt is assumed.
 
 See L<http://opencalais.com/APIcalls#inputparameters> for description of such
 parameters.
+
+=item B<semanticproxy()>
+
+	$calais->semanticproxy($url, PARAM => ...);
+
+Submits text to the SemanticProxy web service.
+
+Optional parameters:
+
+=over 4
+
+=item  output
+
+Format of the requested output (may be html, rdf or microformat).
+
+=back
 
 =back
 
