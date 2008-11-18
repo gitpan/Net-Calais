@@ -30,6 +30,8 @@ makedocs.pl
 \#$
 \b\.#
 \.bak$
+\bpod2htmd\.tmp$
+\bpod2html\.tmp$
 
 # Avoid Devel::Cover files.
 \bcover_db\b

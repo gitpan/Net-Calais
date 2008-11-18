@@ -13,10 +13,10 @@ use HTTP::Request::Common;
 use LWP::UserAgent;
 use XML::Writer;
 
-our $VERSION = '1.01';
+our $VERSION = '1.02';
 
-use constant CALAIS_URL => 'http://api.opencalais.com/enlighten/rest/';
-use constant SEMANTICPROXY_URL => 'http://service.semanticproxy.com/processurl/%s/%s/%s';
+our $CALAIS_URL = 'http://api.opencalais.com/enlighten/rest/';
+our $SEMANTICPROXY_URL = 'http://service.semanticproxy.com/processurl/';
 
 #--
 sub new {
@@ -32,8 +32,19 @@ sub enlighten {
     my __PACKAGE__ $self = shift;
     my ($content, %params) = @_;
     
+    # process user params and set some defaults
     my %request_params = (licenseID => $self->{apikey}, content => $content);
+    my (%processingDirectives, %userDirectives) = ();
+    $processingDirectives{'c:contentType'} = $params{contentType} || 'text/txt';
+    $processingDirectives{'c:outputFormat'} = $params{outputFormat} || 'XML/RDF';
+    for (qw(reltagBaseURL calculateRelevanceScore enableMetadataType discardMetadata)) {
+        $processingDirectives{"c:$_"} = $params{$_} if $params{$_};
+    }
+    for (qw(allowDistribution allowSearch externalID submitter)) {
+        $userDirectives{"c:$_"} = $params{$_} if $params{$_};
+    }
     
+    # build the paramxXML parameter
     my $xmlWriter = XML::Writer->new(
         OUTPUT => \$request_params{paramsXML},
         DATA_MODE => 1,
@@ -43,23 +54,18 @@ sub enlighten {
     $xmlWriter->startTag('c:params',
         'xmlns:c' => 'http://s.opencalais.com/1/pred/',
         'xmlns:rdf' => 'http://www.w3.org/1999/02/22-rdf-syntax-ns#');
-    $xmlWriter->startTag('c:processingDirectives',
-        'c:contentType' => $params{contentType} || 'text/txt',
-        'c:enableMetadataType' => $params{enableMetadataType},
-        'c:outputFormat' => $params{outputFormat});
+    $xmlWriter->startTag('c:processingDirectives', %processingDirectives);
     $xmlWriter->endTag('c:processingDirectives');
-    $xmlWriter->startTag('c:userDirectives',
-        'c:allowDistribution' => $params{allowDistribution},
-        'c:allowSearch' => $params{allowSearch},
-        'c:externalID' => $params{externalID},
-        'c:submitter' => $params{submitter});
+    $xmlWriter->startTag('c:userDirectives', %userDirectives);
     $xmlWriter->endTag('c:userDirectives');    
     $xmlWriter->startTag('c:externalMetadata');
+    $xmlWriter->raw($params{externalMetadata}) if $params{externalMetadata};
     $xmlWriter->endTag('c:externalMetadata');
     $xmlWriter->endTag('c:params');
     $xmlWriter->end;
     
-    my $response = $self->{ua}->request(POST CALAIS_URL, \%request_params);
+    # do REST request and return response
+    my $response = $self->{ua}->request(POST $CALAIS_URL, \%request_params);
     if (!$response->is_success) {
         $self->{error} = $response->status_line;
         return undef;
@@ -74,7 +80,7 @@ sub semanticproxy {
     die "URL is required\n" unless $url;
     $params{output} ||= 'html';
     
-    my $reqUrl = sprintf(SEMANTICPROXY_URL, $self->{apikey}, $params{output}, $url);
+    my $reqUrl = sprintf("%s%s/%s/%s", $SEMANTICPROXY_URL, $self->{apikey}, $params{output}, $url);
     my $response = $self->{ua}->request(GET $reqUrl);
     if (!$response->is_success) {
         $self->{error} = $response->status_line;
@@ -132,11 +138,15 @@ Unless specified, text/txt is assumed.
 
 =item  outputFormat
 
+Format of the server response. Unless specified, XML/RDF is assumed.
+
 =item  reltagBaseURL
 
 =item  calculateRelevanceScore
 
 =item  enableMetadataType
+
+=item  discardMetadata
 
 =item  allowDistribution
 
@@ -145,6 +155,10 @@ Unless specified, text/txt is assumed.
 =item  externalID
 
 =item  submitter
+
+=item  externalMetadata
+
+This should be a RDF representation of your additional metadata (see OpenCalais docs).
 
 =back
 
@@ -166,6 +180,24 @@ Optional parameters:
 Format of the requested output (may be html, rdf or microformat).
 
 =back
+
+=back
+
+=head1 PACKAGE VARIABLES
+
+=over 8
+
+=item B<$CALAIS_URL>
+
+By modifying the I<$Net::Calais::CALAIS_URL> variable you can set a custom URL
+for REST requests.  The default value is I<http://api.opencalais.com/enlighten/rest/>.
+This may be useful to use the beta service which is usually located at I<beta.opencalais.com>.
+
+=item B<$SEMANTICPROXY_URL>
+
+By modifying the I<$Net::Calais::SEMANTICPROXY_URL> variable you can set a custom base URL
+for SemanticProxy REST requests.  The default value is I<http://service.semanticproxy.com/processurl/>.
+
 
 =back
 
